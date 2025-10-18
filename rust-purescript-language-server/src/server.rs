@@ -7,8 +7,8 @@ use crate::ragu;
 use crate::types::{Config, ServerState};
 use lsp_types::{
     ProgressParams, ProgressParamsValue, WorkDoneProgress, WorkDoneProgressBegin,
-    WorkDoneProgressCreateParams, WorkDoneProgressEnd,
-    notification::Progress, request::WorkDoneProgressCreate,
+    WorkDoneProgressCreateParams, WorkDoneProgressEnd, notification::Progress,
+    request::WorkDoneProgressCreate,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -172,7 +172,6 @@ impl Backend {
             }
         }
     }
-
 }
 
 #[tower_lsp::async_trait]
@@ -225,6 +224,31 @@ impl LanguageServer for Backend {
     }
 
     async fn shutdown(&self) -> LspResult<()> {
+        // Take the process from state to get ownership
+        let mut process = {
+            let mut state = self.state.lock().await;
+            state.ide_server.process.take()
+        };
+
+        // Kill the process if it exists
+        if let Some(ref mut child) = process {
+            match child.kill() {
+                Ok(_) => {
+                    self.client
+                        .log_message(MessageType::INFO, "PureScript IDE server stopped")
+                        .await;
+                }
+                Err(e) => {
+                    self.client
+                        .log_message(
+                            MessageType::WARNING,
+                            format!("Failed to stop IDE server: {}", e),
+                        )
+                        .await;
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -375,12 +399,10 @@ impl LanguageServer for Backend {
         &self,
         params: ExecuteCommandParams,
     ) -> LspResult<Option<serde_json::Value>> {
-        if let Err(e) = commands::execute_command(&params.command, &self.client, &self.state).await {
+        if let Err(e) = commands::execute_command(&params.command, &self.client, &self.state).await
+        {
             self.client
-                .log_message(
-                    MessageType::ERROR,
-                    format!("Command failed: {}", e),
-                )
+                .log_message(MessageType::ERROR, format!("Command failed: {}", e))
                 .await;
         }
         Ok(None)
