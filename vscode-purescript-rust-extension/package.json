@@ -1,0 +1,84 @@
+{
+  "name": "purescript-rust-language-server",
+  "displayName": "PureScript Rust Language Server",
+  "description": "PureScript language server built in Rust for fast diagnostics and formatting",
+  "version": "0.1.0",
+  "publisher": "purescript-rust",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters"
+  ],
+  "keywords": [
+    "purescript",
+    "language-server",
+    "rust",
+    "diagnostics",
+    "formatting"
+  ],
+  "activationEvents": [
+    "workspaceContains:spago.yaml"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "purescript.build",
+        "title": "PureScript: Build"
+      },
+      {
+        "command": "purescript.buildQuick",
+        "title": "PureScript: Build Quick"
+      }
+    ],
+    "configuration": {
+      "title": "PureScript Rust Language Server",
+      "properties": {
+        "purescriptRust.formatter": {
+          "type": "string",
+          "enum": [
+            "purs-tidy"
+          ],
+          "default": "purs-tidy",
+          "description": "Formatter to use for PureScript files"
+        },
+        "purescriptRust.fastRebuildOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable fast rebuild diagnostics on save"
+        },
+        "purescriptRust.raguPath": {
+          "type": "string",
+          "default": "ragu",
+          "description": "Path to the ragu executable for configuration"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "node esbuild.js",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "esbuild": "^0.25.11",
+    "eslint": "^8.28.0",
+    "glob": "^8.0.3",
+    "mocha": "^10.1.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.1.0"
+  }
+}
