@@ -116,7 +116,7 @@ impl Backend {
                 token: token.clone(),
                 value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(
                     WorkDoneProgressBegin {
-                        title: "⏳".into(),
+                        title: "".into(),
                         message: Some(file_name.into()),
                         cancellable: Some(false),
                         percentage: None,

@@ -64,7 +64,7 @@ pub async fn execute(
         .send_notification::<Progress>(ProgressParams {
             token: token.clone(),
             value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(WorkDoneProgressBegin {
-                title: "🔨".into(),
+                title: "".into(),
                 message: Some(format!("Starting {}...", build_type)),
                 cancellable: Some(false),
                 percentage: None,
@@ -232,4 +232,3 @@ pub async fn execute(
 
     Ok(())
 }
-
