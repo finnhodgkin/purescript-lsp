@@ -34,24 +34,6 @@ pub fn error_to_code_action(error: &RebuildError, uri: &lsp_types::Url) -> Optio
     let suggestion = error.suggestion.as_ref()?;
     let position = &error.position;
 
-    // Debug: Log suggestion details
-    eprintln!(
-        "Code action for {}: replacement='{}', has_replace_range={}",
-        error.error_code,
-        suggestion.replacement,
-        suggestion.replace_range.is_some()
-    );
-
-    if let Some(replace_range) = &suggestion.replace_range {
-        eprintln!(
-            "Suggestion replace_range: start=({},{}), end=({},{})",
-            replace_range.start_line,
-            replace_range.start_column,
-            replace_range.end_line,
-            replace_range.end_column
-        );
-    }
-
     let range = Range {
         start: Position {
             line: position.start_line.saturating_sub(1),
@@ -106,16 +88,6 @@ pub fn error_to_code_action(error: &RebuildError, uri: &lsp_types::Url) -> Optio
             suggestion.replacement.trim_end().to_string(),
         )
     };
-
-    // Debug: Log range details
-    eprintln!(
-        "Using range: start=({},{}), end=({},{})",
-        final_range.start.line,
-        final_range.start.character,
-        final_range.end.line,
-        final_range.end.character
-    );
-    eprintln!("Final text: '{}'", final_text);
 
     let text_edit = TextEdit {
         range: final_range,

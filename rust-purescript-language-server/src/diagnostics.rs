@@ -28,6 +28,9 @@ pub fn rebuild_error_to_diagnostic(error: &RebuildError, _uri: &Url) -> Option<D
         | "UnusedExplicitImport"
         | "ShadowedName"
         | "UnusedTypeVar"
+        | "UnusedName"
+        | "WildcardInferredType"
+        | "UnusedDctorImport"
         | "Deprecated" => DiagnosticSeverity::WARNING,
 
         // Default to error for everything else
