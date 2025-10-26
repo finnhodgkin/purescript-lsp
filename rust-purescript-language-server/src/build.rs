@@ -260,20 +260,6 @@ fn parse_single_progress_line(line: &str) -> Option<(u32, u32, String)> {
     None
 }
 
-/// Parse compilation progress from stdout
-/// Returns (current, total, module_name) for lines like "[2 of 5] Compiling/Skipping Speakers.App.Page.Form"
-pub fn parse_compilation_progress(stdout_output: &str) -> Vec<(u32, u32, String)> {
-    let mut progress = Vec::new();
-
-    for line in stdout_output.lines() {
-        if let Some((current, total, module_name)) = parse_single_progress_line(line) {
-            progress.push((current, total, module_name));
-        }
-    }
-
-    progress
-}
-
 /// Convert file path to URI for diagnostics
 pub fn file_path_to_uri(file_path: &str, workspace_root: &str) -> Option<Url> {
     let full_path = if Path::new(file_path).is_absolute() {

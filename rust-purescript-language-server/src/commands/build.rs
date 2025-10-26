@@ -153,6 +153,18 @@ pub async fn execute(
                     })
                     .await;
 
+                // Clear diagnostics for all .purs files from previous build
+                // This is important for quick builds that don't touch all files
+                {
+                    let state = state.lock().await;
+                    for uri in state.last_build_errors.keys() {
+                        // Only clear .purs files
+                        if uri.path().ends_with(".purs") {
+                            client.publish_diagnostics(uri.clone(), vec![], None).await;
+                        }
+                    }
+                }
+
                 // Clear previous build errors
                 {
                     let mut state = state.lock().await;
@@ -201,14 +213,6 @@ pub async fn execute(
                             let diagnostics = diagnostics::convert_rebuild_errors(warnings, &uri);
                             client.publish_diagnostics(uri, diagnostics, None).await;
                         }
-                    }
-                }
-
-                // Clear diagnostics for files that no longer have errors
-                let state = state.lock().await;
-                for uri in state.document_contents.keys() {
-                    if !all_uris.contains(uri) && state.last_build_errors.contains_key(uri) {
-                        client.publish_diagnostics(uri.clone(), vec![], None).await;
                     }
                 }
             }

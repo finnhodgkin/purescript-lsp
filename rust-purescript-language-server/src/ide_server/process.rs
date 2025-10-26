@@ -115,9 +115,6 @@ pub async fn start_ide_server_async(
         }
     });
 
-    // Wait for the IDE server to start up
-    sleep(Duration::from_millis(1000)).await;
-
     // Check if process is still alive
     if let Some(exit_status) = child.try_wait()? {
         let stdout_output = stdout_captured.lock().unwrap().clone();
