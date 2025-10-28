@@ -78,12 +78,34 @@ impl Backend {
     }
 
     /// Trigger fast rebuild for a file
-    async fn trigger_fast_rebuild(&self, port: u16, file_path: &str, uri: &Url) {
+    /// If content is provided, it will use the data: prefix format for in-memory rebuild
+    async fn trigger_fast_rebuild(
+        &self,
+        port: u16,
+        file_path: &str,
+        uri: &Url,
+        content: Option<String>,
+    ) {
         // Extract filename for display
         let file_name = std::path::Path::new(file_path)
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("file");
+
+        // End any previous active progress to prevent stuck indicators
+        {
+            let mut state = self.state.lock().await;
+            if let Some(previous_token) = state.active_rebuild_token.take() {
+                self.client
+                    .send_notification::<Progress>(ProgressParams {
+                        token: previous_token,
+                        value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(
+                            WorkDoneProgressEnd { message: None },
+                        )),
+                    })
+                    .await;
+            }
+        }
 
         // Create unique token for progress
         let token = NumberOrString::String(format!(
@@ -108,6 +130,14 @@ impl Backend {
                     format!("Failed to create progress token: {}", e),
                 )
                 .await;
+            // Return early - don't try to use an invalid token
+            return;
+        }
+
+        // Store the active token
+        {
+            let mut state = self.state.lock().await;
+            state.active_rebuild_token = Some(token.clone());
         }
 
         // Send begin notification
@@ -125,9 +155,15 @@ impl Backend {
             })
             .await;
 
-        let result = ide_commands::rebuild_file(port, file_path).await;
+        let result =
+            ide_commands::rebuild_file_with_content(port, file_path, content.as_deref()).await;
 
-        // Send end notification
+        // Clear the active token and send end notification
+        {
+            let mut state = self.state.lock().await;
+            state.active_rebuild_token = None;
+        }
+
         self.client
             .send_notification::<Progress>(ProgressParams {
                 token,
@@ -264,12 +300,34 @@ impl LanguageServer for Backend {
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let uri = &params.text_document.uri;
+
         // Store updated document content
         if let Some(change) = params.content_changes.first() {
-            let mut state = self.state.lock().await;
-            state
-                .document_contents
-                .insert(params.text_document.uri.clone(), change.text.clone());
+            let content = change.text.clone();
+
+            {
+                let mut state = self.state.lock().await;
+                state.document_contents.insert(uri.clone(), content.clone());
+            }
+
+            // Optionally trigger fast rebuild on change using data: prefix
+            let (fast_rebuild_enabled, port) = {
+                let state = self.state.lock().await;
+                (state.config.fast_rebuild_on_change, state.ide_server.port)
+            };
+
+            if fast_rebuild_enabled {
+                if let Some(port) = port {
+                    if let Ok(file_path) = uri.to_file_path() {
+                        if let Some(file_path_str) = file_path.to_str() {
+                            // Pass the content for data: prefix rebuild
+                            self.trigger_fast_rebuild(port, file_path_str, uri, Some(content))
+                                .await;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -286,7 +344,9 @@ impl LanguageServer for Backend {
             if let Some(port) = port {
                 if let Ok(file_path) = uri.to_file_path() {
                     if let Some(file_path_str) = file_path.to_str() {
-                        self.trigger_fast_rebuild(port, file_path_str, uri).await;
+                        // For saves, rebuild from disk (no content passed)
+                        self.trigger_fast_rebuild(port, file_path_str, uri, None)
+                            .await;
                     } else {
                         self.client
                             .log_message(

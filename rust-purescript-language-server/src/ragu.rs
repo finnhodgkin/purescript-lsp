@@ -51,5 +51,6 @@ pub fn init_config(working_dir: &str) -> Result<crate::types::Config> {
         source_globs,
         formatter: crate::types::Formatter::PursTidy,
         fast_rebuild_on_save: true,
+        fast_rebuild_on_change: true,
     })
 }

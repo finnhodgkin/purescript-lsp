@@ -1,6 +1,6 @@
 use crate::ide_server::RebuildError;
 use std::collections::HashMap;
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{NumberOrString, Url};
 
 /// Configuration for the language server
 #[derive(Debug, Clone)]
@@ -9,6 +9,7 @@ pub struct Config {
     pub source_globs: Vec<String>,
     pub formatter: Formatter,
     pub fast_rebuild_on_save: bool,
+    pub fast_rebuild_on_change: bool,
 }
 
 impl Default for Config {
@@ -18,6 +19,7 @@ impl Default for Config {
             source_globs: vec!["src/**/*.purs".to_string()],
             formatter: Formatter::PursTidy,
             fast_rebuild_on_save: true,
+            fast_rebuild_on_change: false,
         }
     }
 }
@@ -54,6 +56,7 @@ pub struct ServerState {
     pub document_errors: HashMap<Url, Vec<RebuildError>>,
     pub last_build_errors: HashMap<Url, Vec<RebuildError>>,
     pub document_contents: HashMap<Url, String>,
+    pub active_rebuild_token: Option<NumberOrString>,
 }
 
 impl ServerState {
@@ -65,6 +68,7 @@ impl ServerState {
             document_errors: HashMap::new(),
             last_build_errors: HashMap::new(),
             document_contents: HashMap::new(),
+            active_rebuild_token: None,
         }
     }
 }
