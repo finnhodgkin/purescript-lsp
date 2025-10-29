@@ -208,6 +208,37 @@ impl Backend {
             }
         }
     }
+
+    /// Handle document focus event - triggers rebuild when fast_rebuild_on_change is enabled
+    pub async fn handle_document_focus(&self, uri: &Url) {
+        // Get the document content and check if fast rebuild is enabled
+        let (fast_rebuild_enabled, port, content) = {
+            let state = self.state.lock().await;
+            (
+                state.config.fast_rebuild_on_change,
+                state.ide_server.port,
+                state.document_contents.get(uri).cloned(),
+            )
+        };
+
+        if fast_rebuild_enabled {
+            if let Some(port) = port {
+                if let Some(content) = content {
+                    if let Ok(file_path) = uri.to_file_path() {
+                        if let Some(file_path_str) = file_path.to_str() {
+                            // Skip rebuild if file contains foreign imports
+                            // (fast rebuild from content doesn't work with foreign modules)
+                            if !content.contains("foreign import") {
+                                // Pass the content for data: prefix rebuild
+                                self.trigger_fast_rebuild(port, file_path_str, uri, Some(content))
+                                    .await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -238,6 +269,7 @@ impl LanguageServer for Backend {
                     commands: vec![
                         "purescript.build".to_string(),
                         "purescript.buildQuick".to_string(),
+                        "purescript.focusDocument".to_string(),
                     ],
                     ..Default::default()
                 }),
@@ -290,12 +322,34 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = &params.text_document.uri;
+        let content = params.text_document.text.clone();
+
         // Store document content
         {
             let mut state = self.state.lock().await;
-            state
-                .document_contents
-                .insert(uri.clone(), params.text_document.text.clone());
+            state.document_contents.insert(uri.clone(), content.clone());
+        }
+
+        // Trigger fast rebuild on open when fast_rebuild_on_change is enabled
+        let (fast_rebuild_enabled, port) = {
+            let state = self.state.lock().await;
+            (state.config.fast_rebuild_on_change, state.ide_server.port)
+        };
+
+        if fast_rebuild_enabled {
+            if let Some(port) = port {
+                if let Ok(file_path) = uri.to_file_path() {
+                    if let Some(file_path_str) = file_path.to_str() {
+                        // Skip rebuild if file contains foreign imports
+                        // (fast rebuild from content doesn't work with foreign modules)
+                        if !content.contains("foreign import") {
+                            // Pass the content for data: prefix rebuild
+                            self.trigger_fast_rebuild(port, file_path_str, uri, Some(content))
+                                .await;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -321,9 +375,13 @@ impl LanguageServer for Backend {
                 if let Some(port) = port {
                     if let Ok(file_path) = uri.to_file_path() {
                         if let Some(file_path_str) = file_path.to_str() {
-                            // Pass the content for data: prefix rebuild
-                            self.trigger_fast_rebuild(port, file_path_str, uri, Some(content))
-                                .await;
+                            // Skip rebuild if file contains foreign imports
+                            // (fast rebuild from content doesn't work with foreign modules)
+                            if !content.contains("foreign import") {
+                                // Pass the content for data: prefix rebuild
+                                self.trigger_fast_rebuild(port, file_path_str, uri, Some(content))
+                                    .await;
+                            }
                         }
                     }
                 }
@@ -459,7 +517,26 @@ impl LanguageServer for Backend {
         &self,
         params: ExecuteCommandParams,
     ) -> LspResult<Option<serde_json::Value>> {
-        if let Err(e) = commands::execute_command(&params.command, &self.client, &self.state).await
+        // Special handling for focusDocument command to call our method directly
+        if params.command == "purescript.focusDocument" {
+            if let Some(uri_value) = params.arguments.first() {
+                if let Ok(uri_str) = serde_json::from_value::<String>(uri_value.clone()) {
+                    if let Ok(uri) = Url::parse(&uri_str) {
+                        self.handle_document_focus(&uri).await;
+                    }
+                }
+            }
+            return Ok(None);
+        }
+
+        let args = if params.arguments.is_empty() {
+            None
+        } else {
+            Some(params.arguments.clone())
+        };
+
+        if let Err(e) =
+            commands::execute_command(&params.command, &self.client, &self.state, args).await
         {
             self.client
                 .log_message(MessageType::ERROR, format!("Command failed: {}", e))

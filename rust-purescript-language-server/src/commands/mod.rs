@@ -10,6 +10,7 @@ pub async fn execute_command(
     command: &str,
     client: &Client,
     state: &Arc<Mutex<ServerState>>,
+    _args: Option<Vec<serde_json::Value>>,
 ) -> Result<(), String> {
     match command {
         "purescript.build" => build::execute(client, state, false).await,
@@ -17,4 +18,3 @@ pub async fn execute_command(
         _ => Err(format!("Unknown command: {}", command)),
     }
 }
-

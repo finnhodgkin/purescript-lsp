@@ -38,14 +38,10 @@ export function activate(context: ExtensionContext) {
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
     // Register the server for purescript documents
-    documentSelector: [
-      { scheme: 'file', language: 'purescript' },
-      { scheme: 'file', pattern: '**/package.json' },
-      { scheme: 'file', pattern: '**/spago.yaml' },
-    ],
+    documentSelector: [{ scheme: 'file', language: 'purescript' }],
     synchronize: {
       // Notify the server about file changes
-      fileEvents: workspace.createFileSystemWatcher('**/{*.purs,spago.yaml}'),
+      fileEvents: workspace.createFileSystemWatcher('**/*.purs'),
     },
     outputChannel,
   };
@@ -57,11 +53,44 @@ export function activate(context: ExtensionContext) {
     serverOptions,
     clientOptions
   );
+
   // Start the client. This will also launch the server
-  client.start().catch((error) => {
-    outputChannel.appendLine(`Failed to start language client: ${error}`);
-    window.showErrorMessage('Failed to start Purescript LSP language client.');
-  });
+  client.start().then(
+    () => {
+      outputChannel.appendLine('Language client started successfully');
+
+      // Handle document focus events - trigger quick build when a PureScript file becomes active
+      // Only set up after client is ready
+      context.subscriptions.push(
+        window.onDidChangeActiveTextEditor((editor) => {
+          if (editor && editor.document.languageId === 'purescript') {
+            // Send focusDocument command to the language server
+            client
+              .sendRequest('workspace/executeCommand', {
+                command: 'purescript.focusDocument',
+                arguments: [editor.document.uri.toString()],
+              })
+              .then(
+                () => {
+                  // Command executed successfully
+                },
+                (error) => {
+                  outputChannel.appendLine(
+                    `Failed to send focus event: ${error}`
+                  );
+                }
+              );
+          }
+        })
+      );
+    },
+    (error) => {
+      outputChannel.appendLine(`Failed to start language client: ${error}`);
+      window.showErrorMessage(
+        'Failed to start Purescript LSP language client.'
+      );
+    }
+  );
 }
 
 export function deactivate(): Thenable<void> | undefined {
