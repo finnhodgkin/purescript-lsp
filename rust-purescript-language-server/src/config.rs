@@ -141,20 +141,6 @@ pub async fn fetch_client_config(client: &Client) -> Option<ClientConfig> {
 /// This is a high-level helper that combines fetching client config and initializing.
 pub async fn init_from_client_and_ragu(client: &Client, working_dir: &str) -> Result<Config> {
     let client_config = fetch_client_config(client).await;
-
-    if client_config.is_some() {
-        client
-            .log_message(
-                MessageType::INFO,
-                "Using client configuration merged with ragu defaults",
-            )
-            .await;
-    } else {
-        client
-            .log_message(MessageType::INFO, "Using ragu defaults only")
-            .await;
-    }
-
     init_with_client_config(working_dir, client_config)
 }
 

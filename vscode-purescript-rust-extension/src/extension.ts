@@ -34,7 +34,7 @@ async function startLanguageClient(
   context: ExtensionContext,
   outputChannel: any
 ): Promise<void> {
-  outputChannel.appendLine('Starting PureScript language server...');
+  outputChannel.appendLine('Starting LSP 🚀');
 
   // The server is implemented in Rust
   // Use the binary from PATH instead of a hardcoded location
@@ -69,8 +69,6 @@ async function startLanguageClient(
   // Start the client. This will also launch the server
   await client.start();
 
-  outputChannel.appendLine('Language client started successfully');
-
   // Handle document focus events - trigger quick build when a PureScript file becomes active
   // Only set up after client is ready
   context.subscriptions.push(
@@ -99,8 +97,6 @@ export function activate(context: ExtensionContext) {
   const outputChannel = window.createOutputChannel('Purescript LSP');
   outputChannel.show(true);
 
-  outputChannel.appendLine('Activating PureScript language server...');
-
   // Start the language client
   startLanguageClient(context, outputChannel).catch((error) => {
     outputChannel.appendLine(`Failed to start language client: ${error}`);
@@ -111,10 +107,6 @@ export function activate(context: ExtensionContext) {
   context.subscriptions.push(
     workspace.onDidChangeConfiguration(async (e) => {
       if (e.affectsConfiguration('purescriptRust')) {
-        outputChannel.appendLine(
-          'Configuration changed, restarting language server...'
-        );
-
         // Stop the current client
         if (client) {
           await client.stop();
@@ -123,7 +115,7 @@ export function activate(context: ExtensionContext) {
         // Start a new client with the updated configuration
         try {
           await startLanguageClient(context, outputChannel);
-          outputChannel.appendLine('Language server restarted successfully');
+          outputChannel.appendLine('Language server restarted');
         } catch (error) {
           outputChannel.appendLine(
             `Failed to restart language server: ${error}`
