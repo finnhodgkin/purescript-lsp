@@ -27,6 +27,7 @@ impl Default for Config {
 #[derive(Debug, Clone)]
 pub enum Formatter {
     PursTidy,
+    PursFmt,
 }
 
 /// IDE server state

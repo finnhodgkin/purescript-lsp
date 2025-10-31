@@ -9,7 +9,8 @@ pub async fn format_document_content(
     formatter: &Formatter,
 ) -> Result<Option<Vec<TextEdit>>> {
     let formatted_content = match formatter {
-        Formatter::PursTidy => format_with_purs_tidy(content).await?,
+        Formatter::PursFmt => format_with("pursfmt", content).await?,
+        Formatter::PursTidy => format_with("purs-tidy", content).await?,
     };
 
     if let Some(formatted) = formatted_content {
@@ -33,9 +34,9 @@ pub async fn format_document_content(
     }
 }
 
-async fn format_with_purs_tidy(content: &str) -> Result<Option<String>> {
+async fn format_with(command: &str, content: &str) -> Result<Option<String>> {
     // purs-tidy format expects stdin
-    let mut child = Command::new("purs-tidy")
+    let mut child = Command::new(command)
         .arg("format")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -58,6 +59,6 @@ async fn format_with_purs_tidy(content: &str) -> Result<Option<String>> {
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!("purs-tidy failed: stderr={}, stdout={}", stderr, stdout)
+        anyhow::bail!("{} failed: stderr={}, stdout={}", command, stderr, stdout)
     }
 }

@@ -49,7 +49,7 @@ pub fn init_config(working_dir: &str) -> Result<crate::types::Config> {
     Ok(crate::types::Config {
         output_dir,
         source_globs,
-        formatter: crate::types::Formatter::PursTidy,
+        formatter: crate::types::Formatter::PursFmt,
         fast_rebuild_on_save: true,
         fast_rebuild_on_change: true,
     })

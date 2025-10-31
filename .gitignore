@@ -9,3 +9,4 @@ yarn.lock
 target/
 dist/
 out/
+.DS_Store

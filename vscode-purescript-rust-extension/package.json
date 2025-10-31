@@ -40,7 +40,8 @@
         "purescriptRust.formatter": {
           "type": "string",
           "enum": [
-            "purs-tidy"
+            "purs-tidy",
+            "pursfmt"
           ],
           "default": "purs-tidy",
           "description": "Formatter to use for PureScript files"
