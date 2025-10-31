@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::ide_server::RebuildError;
 use std::collections::HashMap;
-use tower_lsp::lsp_types::{NumberOrString, Url};
+use tower_lsp::lsp_types::Url;
 
 /// IDE server state
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub struct ServerState {
     pub document_errors: HashMap<Url, Vec<RebuildError>>,
     pub last_build_errors: HashMap<Url, Vec<RebuildError>>,
     pub document_contents: HashMap<Url, String>,
-    pub active_rebuild_token: Option<NumberOrString>,
+    pub rebuild_counter: u64,
 }
 
 impl Default for ServerState {
@@ -42,7 +42,7 @@ impl Default for ServerState {
             document_errors: HashMap::new(),
             last_build_errors: HashMap::new(),
             document_contents: HashMap::new(),
-            active_rebuild_token: None,
+            rebuild_counter: 0,
         }
     }
 }

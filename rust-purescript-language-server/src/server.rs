@@ -113,29 +113,12 @@ impl Backend {
             .and_then(|name| name.to_str())
             .unwrap_or("file");
 
-        // End any previous active progress to prevent stuck indicators
-        {
+        // Create unique token using counter to avoid collisions
+        let token = {
             let mut state = self.state.lock().await;
-            if let Some(previous_token) = state.active_rebuild_token.take() {
-                self.client
-                    .send_notification::<Progress>(ProgressParams {
-                        token: previous_token,
-                        value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(
-                            WorkDoneProgressEnd { message: None },
-                        )),
-                    })
-                    .await;
-            }
-        }
-
-        // Create unique token for progress
-        let token = NumberOrString::String(format!(
-            "rebuild-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis()
-        ));
+            state.rebuild_counter += 1;
+            NumberOrString::String(format!("purescript-rebuild-{}", state.rebuild_counter))
+        };
 
         // Request client to create progress indicator
         if let Err(e) = self
@@ -153,12 +136,6 @@ impl Backend {
                 .await;
             // Return early - don't try to use an invalid token
             return;
-        }
-
-        // Store the active token
-        {
-            let mut state = self.state.lock().await;
-            state.active_rebuild_token = Some(token.clone());
         }
 
         // Send begin notification
@@ -179,15 +156,10 @@ impl Backend {
         let result =
             ide_commands::rebuild_file_with_content(port, file_path, content.as_deref()).await;
 
-        // Clear the active token and send end notification
-        {
-            let mut state = self.state.lock().await;
-            state.active_rebuild_token = None;
-        }
-
+        // Send end notification
         self.client
             .send_notification::<Progress>(ProgressParams {
-                token,
+                token: token.clone(),
                 value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd {
                     message: None,
                 })),
