@@ -38,7 +38,7 @@ impl Config {
 /// Note: output_dir and source_globs are intentionally not configurable here.
 /// These are always sourced from ragu, which is the single source of truth
 /// for project structure.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientConfig {
     pub formatter: Option<Formatter>,
@@ -46,7 +46,7 @@ pub struct ClientConfig {
     pub fast_rebuild_on_change: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Formatter {
     PursTidy,

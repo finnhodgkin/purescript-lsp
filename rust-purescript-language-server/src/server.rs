@@ -338,12 +338,41 @@ impl LanguageServer for Backend {
             .log_message(MessageType::INFO, "Configuration changed")
             .await;
 
-        // Simply restart the server, which will fetch the new configuration
-        if let Err(e) = self.restart_server().await {
+        // Fetch the new client config
+        let new_client_config = config::fetch_client_config(&self.client).await;
+
+        // Get the current client-provided settings from our config
+        let current_client_config = {
+            let state = self.state.lock().await;
+            state.config.as_ref().map(|c| config::ClientConfig {
+                formatter: Some(c.formatter.clone()),
+                fast_rebuild_on_save: Some(c.fast_rebuild_on_save),
+                fast_rebuild_on_change: Some(c.fast_rebuild_on_change),
+            })
+        };
+
+        // Only restart if the config actually changed
+        if new_client_config != current_client_config {
             self.client
                 .log_message(
-                    MessageType::ERROR,
-                    format!("Failed to restart server after configuration change: {}", e),
+                    MessageType::INFO,
+                    "Client configuration changed, restarting IDE server",
+                )
+                .await;
+
+            if let Err(e) = self.restart_server().await {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed to restart server after configuration change: {}", e),
+                    )
+                    .await;
+            }
+        } else {
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    "Configuration unchanged, skipping restart",
                 )
                 .await;
         }
