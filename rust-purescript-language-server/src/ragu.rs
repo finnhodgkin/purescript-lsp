@@ -40,17 +40,3 @@ pub fn get_sources(working_dir: &str) -> Result<Vec<String>> {
 
     Ok(globs)
 }
-
-/// Initialize configuration using ragu
-pub fn init_config(working_dir: &str) -> Result<crate::types::Config> {
-    let output_dir = get_output_dir(working_dir)?;
-    let source_globs = get_sources(working_dir)?;
-
-    Ok(crate::types::Config {
-        output_dir,
-        source_globs,
-        formatter: crate::types::Formatter::PursFmt,
-        fast_rebuild_on_save: true,
-        fast_rebuild_on_change: true,
-    })
-}

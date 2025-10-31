@@ -1,4 +1,4 @@
-use crate::types::Formatter;
+use crate::config::Formatter;
 use anyhow::Result;
 use lsp_types::{Position, Range, TextEdit};
 use tokio::process::Command;

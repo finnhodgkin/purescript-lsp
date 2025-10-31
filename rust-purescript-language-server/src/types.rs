@@ -1,34 +1,7 @@
+use crate::config::Config;
 use crate::ide_server::RebuildError;
 use std::collections::HashMap;
 use tower_lsp::lsp_types::{NumberOrString, Url};
-
-/// Configuration for the language server
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub output_dir: String,
-    pub source_globs: Vec<String>,
-    pub formatter: Formatter,
-    pub fast_rebuild_on_save: bool,
-    pub fast_rebuild_on_change: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            output_dir: "output".to_string(),
-            source_globs: vec!["src/**/*.purs".to_string()],
-            formatter: Formatter::PursTidy,
-            fast_rebuild_on_save: true,
-            fast_rebuild_on_change: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Formatter {
-    PursTidy,
-    PursFmt,
-}
 
 /// IDE server state
 #[derive(Debug)]
@@ -51,7 +24,7 @@ impl Default for IdeServerState {
 /// Server state
 #[derive(Debug)]
 pub struct ServerState {
-    pub config: Config,
+    pub config: Option<Config>,
     pub ide_server: IdeServerState,
     pub workspace_root: Option<String>,
     pub document_errors: HashMap<Url, Vec<RebuildError>>,
@@ -60,10 +33,10 @@ pub struct ServerState {
     pub active_rebuild_token: Option<NumberOrString>,
 }
 
-impl ServerState {
-    pub fn new(config: Config) -> Self {
+impl Default for ServerState {
+    fn default() -> Self {
         Self {
-            config,
+            config: None,
             ide_server: IdeServerState::default(),
             workspace_root: None,
             document_errors: HashMap::new(),
@@ -71,5 +44,33 @@ impl ServerState {
             document_contents: HashMap::new(),
             active_rebuild_token: None,
         }
+    }
+}
+
+impl ServerState {
+    /// Check if fast rebuild on save is enabled (returns false if not initialized)
+    pub fn fast_rebuild_on_save(&self) -> bool {
+        self.config
+            .as_ref()
+            .map(|c| c.fast_rebuild_on_save)
+            .unwrap_or(false)
+    }
+
+    /// Check if fast rebuild on change is enabled (returns false if not initialized)
+    pub fn fast_rebuild_on_change(&self) -> bool {
+        self.config
+            .as_ref()
+            .map(|c| c.fast_rebuild_on_change)
+            .unwrap_or(false)
+    }
+
+    /// Get the formatter (returns None if not initialized)
+    pub fn formatter(&self) -> Option<crate::config::Formatter> {
+        self.config.as_ref().map(|c| c.formatter.clone())
+    }
+
+    /// Check if the server is initialized with a valid config
+    pub fn is_initialized(&self) -> bool {
+        self.config.is_some()
     }
 }

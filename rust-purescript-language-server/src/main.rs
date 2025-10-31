@@ -4,6 +4,7 @@ use tower_lsp::{LspService, Server};
 mod build;
 mod code_actions;
 mod commands;
+mod config;
 mod diagnostics;
 mod formatting;
 mod ide_server;

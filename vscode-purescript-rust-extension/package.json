@@ -51,10 +51,10 @@
           "default": true,
           "description": "Enable fast rebuild diagnostics on save"
         },
-        "purescriptRust.raguPath": {
-          "type": "string",
-          "default": "ragu",
-          "description": "Path to the ragu executable for configuration"
+        "purescriptRust.fastRebuildOnChange": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable fast rebuild diagnostics on document change (useful for quick feedback while editing)"
         }
       }
     }

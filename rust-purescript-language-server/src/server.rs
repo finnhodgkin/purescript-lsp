@@ -1,10 +1,10 @@
 use crate::code_actions;
 use crate::commands;
+use crate::config;
 use crate::diagnostics;
 use crate::formatting;
 use crate::ide_server::{commands as ide_commands, process};
-use crate::ragu;
-use crate::types::{Config, ServerState};
+use crate::types::ServerState;
 use lsp_types::{
     ProgressParams, ProgressParamsValue, WorkDoneProgress, WorkDoneProgressBegin,
     WorkDoneProgressCreateParams, WorkDoneProgressEnd, notification::Progress,
@@ -23,13 +23,12 @@ pub struct Backend {
 
 impl Backend {
     pub fn new(client: Client) -> Self {
-        let config = Config::default();
-        let state = Arc::new(Mutex::new(ServerState::new(config)));
+        let state = Arc::new(Mutex::new(ServerState::default()));
 
         Self { client, state }
     }
 
-    /// Initialize the server with ragu configuration
+    /// Initialize the server with configuration from client and ragu
     async fn initialize_server(&self, workspace_root: &str) -> anyhow::Result<()> {
         self.client
             .log_message(
@@ -37,21 +36,14 @@ impl Backend {
                 format!("Initializing server for workspace: {}", workspace_root),
             )
             .await;
-        // Get configuration from ragu
-        let config = ragu::init_config(workspace_root)?;
-        self.client
-            .log_message(
-                MessageType::INFO,
-                format!("Output directory: {}", config.output_dir,),
-            )
-            .await;
-        self.client
-            .log_message(
-                MessageType::INFO,
-                format!("Number of source globs: {}", config.source_globs.len()),
-            )
-            .await;
 
+        // Initialize configuration from client and ragu
+        let config = config::init_from_client_and_ragu(&self.client, workspace_root).await?;
+
+        // Log the configuration
+        config::log_config(&self.client, &config).await;
+
+        // Start the IDE server
         let (process, port) = process::start_ide_server_async(
             workspace_root,
             &config.output_dir,
@@ -61,7 +53,7 @@ impl Backend {
 
         // Update state
         let mut state = self.state.lock().await;
-        state.config = config;
+        state.config = Some(config);
         state.workspace_root = Some(workspace_root.to_string());
         state.ide_server.port = Some(port);
         state.ide_server.process = Some(process);
@@ -73,6 +65,38 @@ impl Backend {
                 format!("Purescript IDE server started on port {}", port),
             )
             .await;
+
+        Ok(())
+    }
+
+    /// Restart the IDE server (used when configuration changes)
+    async fn restart_server(&self) -> anyhow::Result<()> {
+        let workspace_root = {
+            let state = self.state.lock().await;
+            state.workspace_root.clone()
+        };
+
+        if let Some(root) = workspace_root {
+            self.client
+                .log_message(
+                    MessageType::INFO,
+                    "Configuration changed, restarting IDE server...".to_string(),
+                )
+                .await;
+
+            // Stop the current IDE server
+            let mut process = {
+                let mut state = self.state.lock().await;
+                state.ide_server.process.take()
+            };
+
+            if let Some(ref mut child) = process {
+                let _ = child.kill();
+            }
+
+            // Reinitialize with new config
+            self.initialize_server(&root).await?;
+        }
 
         Ok(())
     }
@@ -215,7 +239,7 @@ impl Backend {
         let (fast_rebuild_enabled, port, content) = {
             let state = self.state.lock().await;
             (
-                state.config.fast_rebuild_on_change,
+                state.fast_rebuild_on_change(),
                 state.ide_server.port,
                 state.document_contents.get(uri).cloned(),
             )
@@ -244,17 +268,11 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
-        // Initialize server if we have a workspace root
+        // Store workspace root but don't initialize yet - wait for initialized notification
         if let Some(workspace_root) = params.root_uri.and_then(|uri| uri.to_file_path().ok()) {
             if let Some(root_str) = workspace_root.to_str() {
-                if let Err(e) = self.initialize_server(root_str).await {
-                    self.client
-                        .log_message(
-                            MessageType::ERROR,
-                            format!("Failed to initialize server: {}", e),
-                        )
-                        .await;
-                }
+                let mut state = self.state.lock().await;
+                state.workspace_root = Some(root_str.to_string());
             }
         }
 
@@ -273,6 +291,13 @@ impl LanguageServer for Backend {
                     ],
                     ..Default::default()
                 }),
+                workspace: Some(WorkspaceServerCapabilities {
+                    workspace_folders: Some(WorkspaceFoldersServerCapabilities {
+                        supported: Some(true),
+                        change_notifications: Some(OneOf::Left(true)),
+                    }),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -289,6 +314,39 @@ impl LanguageServer for Backend {
                 "Rust PureScript Language Server initialized",
             )
             .await;
+
+        // Get workspace root and initialize server
+        let workspace_root = {
+            let state = self.state.lock().await;
+            state.workspace_root.clone()
+        };
+
+        if let Some(root) = workspace_root {
+            if let Err(e) = self.initialize_server(&root).await {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!("Failed to initialize server: {}", e),
+                    )
+                    .await;
+            }
+        }
+    }
+
+    async fn did_change_configuration(&self, _params: DidChangeConfigurationParams) {
+        self.client
+            .log_message(MessageType::INFO, "Configuration changed")
+            .await;
+
+        // Simply restart the server, which will fetch the new configuration
+        if let Err(e) = self.restart_server().await {
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    format!("Failed to restart server after configuration change: {}", e),
+                )
+                .await;
+        }
     }
 
     async fn shutdown(&self) -> LspResult<()> {
@@ -333,7 +391,7 @@ impl LanguageServer for Backend {
         // Trigger fast rebuild on open when fast_rebuild_on_change is enabled
         let (fast_rebuild_enabled, port) = {
             let state = self.state.lock().await;
-            (state.config.fast_rebuild_on_change, state.ide_server.port)
+            (state.fast_rebuild_on_change(), state.ide_server.port)
         };
 
         if fast_rebuild_enabled {
@@ -368,7 +426,7 @@ impl LanguageServer for Backend {
             // Optionally trigger fast rebuild on change using data: prefix
             let (fast_rebuild_enabled, port) = {
                 let state = self.state.lock().await;
-                (state.config.fast_rebuild_on_change, state.ide_server.port)
+                (state.fast_rebuild_on_change(), state.ide_server.port)
             };
 
             if fast_rebuild_enabled {
@@ -395,7 +453,7 @@ impl LanguageServer for Backend {
         // Get state values and immediately drop the lock
         let (fast_rebuild_enabled, port) = {
             let state = self.state.lock().await;
-            (state.config.fast_rebuild_on_save, state.ide_server.port)
+            (state.fast_rebuild_on_save(), state.ide_server.port)
         }; // Lock is dropped here
 
         if fast_rebuild_enabled {
@@ -442,16 +500,26 @@ impl LanguageServer for Backend {
         params: DocumentFormattingParams,
     ) -> LspResult<Option<Vec<TextEdit>>> {
         // Get formatter config and document content, then immediately drop the lock
-        let (formatter, document_content) = {
+        let (formatter_opt, document_content) = {
             let state = self.state.lock().await;
             (
-                state.config.formatter.clone(),
+                state.formatter(),
                 state
                     .document_contents
                     .get(&params.text_document.uri)
                     .cloned(),
             )
         }; // Lock is dropped here
+
+        let Some(formatter) = formatter_opt else {
+            self.client
+                .log_message(
+                    MessageType::WARNING,
+                    "Server not initialized, cannot format",
+                )
+                .await;
+            return Ok(None);
+        };
 
         let Some(content) = document_content else {
             self.client

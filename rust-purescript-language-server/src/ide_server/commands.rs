@@ -37,11 +37,6 @@ pub async fn send_command(port: u16, command: IdeCommand) -> Result<IdeResponse>
     })
 }
 
-/// Rebuild a single file
-pub async fn rebuild_file(port: u16, file_path: &str) -> Result<RebuildResult> {
-    rebuild_file_with_content(port, file_path, None).await
-}
-
 /// Rebuild a single file with optional content (using data: prefix)
 /// When content is provided, the IDE server will use the in-memory content
 /// instead of reading from disk. This is useful for rebuild-on-change.

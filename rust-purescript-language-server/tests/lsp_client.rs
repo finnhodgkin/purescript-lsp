@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub struct TestLspClient {
     process: Child,
@@ -20,15 +20,18 @@ impl TestLspClient {
             "./target/debug/rust-purescript-language-server",
             "rust-purescript-language-server",
         ];
-        
-        let binary_path = possible_paths.iter()
+
+        let binary_path = possible_paths
+            .iter()
             .find(|path| {
                 let exists = std::path::Path::new(path).exists();
                 println!("Checking path: {} -> exists: {}", path, exists);
                 exists || *path == &"rust-purescript-language-server"
             })
-            .ok_or_else(|| anyhow::anyhow!("Could not find rust-purescript-language-server binary"))?;
-        
+            .ok_or_else(|| {
+                anyhow::anyhow!("Could not find rust-purescript-language-server binary")
+            })?;
+
         println!("Selected binary path: {}", binary_path);
 
         let mut process = Command::new(binary_path)
@@ -112,28 +115,6 @@ impl TestLspClient {
         self.next_id += 1;
         self.send_message(&request)?;
         self.wait_for_response(self.next_id - 1)
-    }
-
-    pub fn wait_for_notification(
-        &mut self,
-        method: &str,
-        timeout_duration: Duration,
-    ) -> Result<Value> {
-        let start = Instant::now();
-
-        loop {
-            if start.elapsed() > timeout_duration {
-                anyhow::bail!("Timeout waiting for notification: {}", method);
-            }
-
-            let message = self.read_message()?;
-
-            if let Some(method_name) = message.get("method").and_then(|m| m.as_str()) {
-                if method_name == method {
-                    return Ok(message);
-                }
-            }
-        }
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
