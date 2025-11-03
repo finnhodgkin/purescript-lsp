@@ -170,10 +170,10 @@ fn run_ragu_build_streaming(
 
             // Combine all output
             let stdout_output = stdout_lines.join("\n");
-            let _stderr_output = stderr_lines.join("\n");
+            let stderr_output = stderr_lines.join("\n");
 
-            // Parse JSON errors from stdout (ragu outputs JSON errors to stdout with --json-errors flag)
-            let (errors, warnings) = parse_build_output(&stdout_output)?;
+            // Parse JSON errors from stderr (ragu outputs JSON errors to stderr with --json-errors flag)
+            let (errors, warnings) = parse_build_output(&stderr_output)?;
 
             Ok(BuildResult {
                 success: exit_status.success(),
@@ -272,10 +272,7 @@ pub fn file_path_to_uri(file_path: &str, workspace_root: &str) -> Option<Url> {
     };
 
     match Url::from_file_path(&full_path) {
-        Ok(uri) => {
-            eprintln!("Converted file path '{}' to URI: {}", file_path, uri);
-            Some(uri)
-        }
+        Ok(uri) => Some(uri),
         Err(_) => {
             eprintln!(
                 "Failed to convert file path to URI: {} (full path: {})",

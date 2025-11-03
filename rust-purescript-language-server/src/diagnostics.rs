@@ -31,6 +31,15 @@ pub fn rebuild_error_to_diagnostic(error: &RebuildError, _uri: &Url) -> Option<D
         | "UnusedName"
         | "WildcardInferredType"
         | "UnusedDctorImport"
+        | "UnusedDeclaration"
+        | "UserDefinedWarning"
+        | "DuplicateSelectiveImport"
+        | "ImplicitQualifiedImport"
+        | "UnnecessaryFFIModule"
+        | "MissingKindDeclaration"
+        | "DuplicateImportRef"
+        | "OverlappingPattern"
+        | "ScopeShadowing"
         | "Deprecated" => DiagnosticSeverity::WARNING,
 
         // Default to error for everything else

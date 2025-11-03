@@ -191,11 +191,10 @@ pub async fn execute(
                     }
                 }
 
-                // Process warnings (only for files in workspace /src)
+                // Process warnings (only for local files, not deps)
                 for (file_path, warnings) in &build_result.warnings {
-                    // Only show warnings for files in the workspace /src directory
-                    let workspace_src = format!("{}/src/", workspace_root);
-                    if file_path.starts_with(&workspace_src) {
+                    // Only show warnings for files in the workspace, not deps
+                    if !file_path.contains(".spago") {
                         if let Some(uri) = build::file_path_to_uri(file_path, &workspace_root) {
                             all_uris.insert(uri.clone());
 
