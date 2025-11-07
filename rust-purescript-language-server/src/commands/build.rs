@@ -153,22 +153,33 @@ pub async fn execute(
                     })
                     .await;
 
-                // Clear diagnostics for all .purs files from previous build
-                // This is important for quick builds that don't touch all files
+                // Clear diagnostics for all .purs files from previous builds
+                // This includes both last_build_errors and document_errors
                 {
                     let state = state.lock().await;
+                    let mut all_uris = std::collections::HashSet::new();
+
+                    // Collect URIs from both error sources
                     for uri in state.last_build_errors.keys() {
-                        // Only clear .purs files
+                        all_uris.insert(uri.clone());
+                    }
+                    for uri in state.document_errors.keys() {
+                        all_uris.insert(uri.clone());
+                    }
+
+                    // Clear diagnostics for all previously tracked files
+                    for uri in all_uris {
                         if uri.path().ends_with(".purs") {
-                            client.publish_diagnostics(uri.clone(), vec![], None).await;
+                            client.publish_diagnostics(uri, vec![], None).await;
                         }
                     }
                 }
 
-                // Clear previous build errors
+                // Clear previous build errors and document errors
                 {
                     let mut state = state.lock().await;
                     state.last_build_errors.clear();
+                    state.document_errors.clear();
                 }
 
                 // Publish diagnostics for all files with errors/warnings
@@ -194,7 +205,7 @@ pub async fn execute(
                 // Process warnings (only for local files, not deps)
                 for (file_path, warnings) in &build_result.warnings {
                     // Only show warnings for files in the workspace, not deps
-                    if !file_path.contains(".spago") {
+                    if !file_path.contains(".spago") && !file_path.contains("..") {
                         if let Some(uri) = build::file_path_to_uri(file_path, &workspace_root) {
                             all_uris.insert(uri.clone());
 

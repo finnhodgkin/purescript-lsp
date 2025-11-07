@@ -14,6 +14,7 @@ use crate::ide_server::RebuildError;
 pub struct BuildResult {
     pub success: bool,
     pub output: String,
+    pub error_output: String,
     pub errors: HashMap<String, Vec<RebuildError>>, // file path -> errors
     pub warnings: HashMap<String, Vec<RebuildError>>, // file path -> warnings
 }
@@ -172,12 +173,12 @@ fn run_ragu_build_streaming(
             let stdout_output = stdout_lines.join("\n");
             let stderr_output = stderr_lines.join("\n");
 
-            // Parse JSON errors from stderr (ragu outputs JSON errors to stderr with --json-errors flag)
-            let (errors, warnings) = parse_build_output(&stderr_output)?;
+            let (errors, warnings) = parse_build_output(&stdout_output)?;
 
             Ok(BuildResult {
                 success: exit_status.success(),
                 output: stdout_output,
+                error_output: stderr_output,
                 errors,
                 warnings,
             })
@@ -202,36 +203,39 @@ fn parse_build_output(
 
     // Look for JSON error output in stderr (where ragu outputs JSON)
     for line in stderr_output.lines() {
-        let trimmed = line.trim();
+        // Find the first '{' character and try to parse from there
+        // This handles cases where ANSI codes or other characters precede the JSON
+        if let Some(json_start) = line.find('{') {
+            let json_candidate = &line[json_start..];
 
-        if trimmed.starts_with('{')
-            && (trimmed.contains("\"errors\"") || trimmed.contains("\"warnings\""))
-        {
-            // Try to parse the JSON line
-            match serde_json::from_str::<CompilerOutput>(trimmed) {
-                Ok(compiler_output) => {
-                    // Process errors
-                    if let Some(compiler_errors) = compiler_output.errors {
-                        for error in compiler_errors {
-                            let file_path = error.filename.clone();
-                            errors.entry(file_path).or_insert_with(Vec::new).push(error);
+            // Check if this looks like our JSON output
+            if json_candidate.contains("\"errors\"") || json_candidate.contains("\"warnings\"") {
+                // Try to parse the JSON
+                match serde_json::from_str::<CompilerOutput>(json_candidate) {
+                    Ok(compiler_output) => {
+                        // Process errors
+                        if let Some(compiler_errors) = compiler_output.errors {
+                            for error in compiler_errors {
+                                let file_path = error.filename.clone();
+                                errors.entry(file_path).or_insert_with(Vec::new).push(error);
+                            }
+                        }
+
+                        // Process warnings
+                        if let Some(compiler_warnings) = compiler_output.warnings {
+                            for warning in compiler_warnings {
+                                let file_path = warning.filename.clone();
+                                warnings
+                                    .entry(file_path)
+                                    .or_insert_with(Vec::new)
+                                    .push(warning);
+                            }
                         }
                     }
-
-                    // Process warnings
-                    if let Some(compiler_warnings) = compiler_output.warnings {
-                        for warning in compiler_warnings {
-                            let file_path = warning.filename.clone();
-                            warnings
-                                .entry(file_path)
-                                .or_insert_with(Vec::new)
-                                .push(warning);
-                        }
+                    Err(e) => {
+                        eprintln!("Failed to parse JSON error output: {}", e);
+                        eprintln!("JSON candidate was: {}", json_candidate);
                     }
-                }
-                Err(e) => {
-                    eprintln!("Failed to parse JSON error output: {}", e);
-                    eprintln!("JSON line was: {}", trimmed);
                 }
             }
         }
